@@ -1,0 +1,15 @@
+[package]
+name = "rust-rpi-playground"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = [
+    "hello_uart"
+]
+
+[workspace.package]
+edition = "2021"
+
+[workspace.dependencies]
+rppal = "0.14.1"
