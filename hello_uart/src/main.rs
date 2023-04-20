@@ -1,6 +1,7 @@
 // uart_blocking_read.rs - Blocks while waiting for incoming serial data.
 
 use std::error::Error;
+use std::mem::forget;
 use std::time::Duration;
 
 use rppal::uart::{Parity, Uart};
@@ -12,22 +13,31 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut buffer = [0u8; 1024];
     loop {
-
         let bytes_received = match uart.read(&mut buffer) {
             Ok(bytes) => {
                 bytes
             }
             Err(a) => {
                 println!("error while reading from uart: {:?}", a);
-                continue
+                continue;
             }
         };
 
         println!("received {} bytes", bytes_received);
 
         if bytes_received > 0 {
-            let message = String::from_utf8(Vec::from(buffer))?;
-            println!("Received message: {}", message);
+            let answer = buffer[0].wrapping_add(1);
+
+            println!("Received message: {}, Answering with: {}", buffer[0], answer);
+
+            match uart.write(&[answer]) {
+                Ok(bytes) => {
+                    println!("Successfully sent {bytes} bytes");
+                }
+                Err(err) => {
+                    println!("error while transferring: {err:?}");
+                }
+            };
         }
     }
 }
