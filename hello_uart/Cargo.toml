@@ -5,4 +5,5 @@ edition.workspace = true
 
 [dependencies]
 rppal.workspace = true
-
+postcard = "1.0.0"
+serde = { version = "1.0.*", default-features = false }
