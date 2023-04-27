@@ -1,10 +1,13 @@
 // uart_blocking_read.rs - Blocks while waiting for incoming serial data.
 
 use std::error::Error;
+use std::io;
+use std::io::BufRead;
 use std::mem::size_of;
 use std::time::Duration;
 
 use rppal::uart::{Parity, Uart};
+use serde::de::Unexpected::Str;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Eq, PartialEq)]
 struct Data {
@@ -15,13 +18,33 @@ struct Data {
 fn main() -> Result<(), Box<dyn Error>> {
     let mut uart = Uart::new(9600, Parity::None, 8, 1)?;
 
-    uart.set_read_mode(size_of::<Data>() as u8, Duration::from_secs(1))?;
+    uart.set_read_mode(1, Duration::from_secs(1))?;
+    uart.set_write_mode(false)?;
 
     let mut buffer = [0u8; size_of::<Data>()];
 
     loop {
+
+        {
+            println!("Press enter.");
+            let stdin = io::stdin();
+            let mut line = String::new();
+            stdin.read_line(&mut line)?;
+        }
+
+        println!("Sending command.");
+        match uart.write(&[1, 211]) {
+            Ok(_) => {
+                println!("Command sent successfully.");
+            }
+            Err(_) => {
+                println!("sent command failed.");
+            }
+        }
+
         let bytes_received = match uart.read(&mut buffer) {
             Ok(bytes) => {
+                println!("Received measurement");
                 bytes
             }
             Err(a) => {
@@ -30,30 +53,28 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        println!("received {} bytes", bytes_received);
-
         if bytes_received > 0 {
-            let answer = buffer[0].wrapping_add(1);
-
-            match postcard::from_bytes::<Data>(&buffer) {
+            let message_length = buffer[0] as usize;
+            let mut message: Vec<u8> = Vec::with_capacity(message_length);
+            let mut remaining_bytes = message_length;
+            while remaining_bytes > 0 {
+                let bytes_read = uart.read(&mut buffer).unwrap();
+                remaining_bytes -= bytes_read;
+                message.extend(buffer.iter().take(bytes_read));
+            }
+            println!("Message: {message:?}");
+            match postcard::from_bytes::<Data>(message.as_slice()) {
                 Ok(data) => {
-                    println!("Successfully deserialized bytes into data: {data:?}");
+                    println!("Successfully deserialized: {data:?}");
                 }
                 Err(err) => {
                     println!("failed to deserialize bytes into data: {err:?}");
                 }
             };
 
-            println!("Received message: {}, Answering with: {}", buffer[0], answer);
-
-            match uart.write(&[answer, 113u8]) {
-                Ok(bytes) => {
-                    println!("Successfully sent {bytes} bytes");
-                }
-                Err(err) => {
-                    println!("error while transferring: {err:?}");
-                }
-            };
+            for i in 0..buffer.len() {
+                buffer[i] = 0;
+            }
         }
     }
 }
